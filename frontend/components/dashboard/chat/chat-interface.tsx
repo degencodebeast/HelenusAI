@@ -141,7 +141,7 @@ export function ChatInterface() {
           </button>
         </div>
         <p className="text-xs text-center mt-2 text-brand-darkGray/60">
-          CryptoGPT may produce inaccurate information about market trends or recommendations.
+          HelenusAI may produce inaccurate information about market trends or recommendations.
         </p>
       </div>
     </div>
