@@ -2,9 +2,15 @@ import logging
 from typing import Dict, List, Any
 import random
 
+# Import the new interface and other needed interfaces
+from ..core.interfaces import IYieldOptimizer, IDatabaseManager # Add more if MarketDataService gets an interface
+# Assuming MarketDataService does not have an interface yet
+from ..services.market import MarketDataService
+
 logger = logging.getLogger(__name__)
 
-class YieldOptimizer:
+# Make YieldOptimizer implement IYieldOptimizer
+class YieldOptimizer(IYieldOptimizer):
     """
     Identifies and optimizes yield opportunities across different protocols.
     
@@ -12,9 +18,11 @@ class YieldOptimizer:
     calculations rather than AI.
     """
     
-    def __init__(self, db_manager, market_data_service, config):
-        self.db_manager = db_manager
-        self.market_data_service = market_data_service
+    # Update type hints
+    def __init__(self, db_manager: IDatabaseManager, market_data_service: MarketDataService, config):
+        self.db_manager: IDatabaseManager = db_manager
+        # Keep MarketDataService concrete for now
+        self.market_data_service: MarketDataService = market_data_service
         self.config = config
         
     async def find_opportunities(self, portfolio_id: int) -> List[Dict[str, Any]]:

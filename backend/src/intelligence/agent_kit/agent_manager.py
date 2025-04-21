@@ -22,9 +22,14 @@ from rebalancr.config import Settings
 # REMOVE these imports to break circular dependency
 # from ...api.dependencies import get_chat_history_manager, get_db_manager
 
-from ...chat.history_manager import ChatHistoryManager
-from ...database.db_manager import DatabaseManager
-from .wallet_provider import PrivyWalletProvider
+from fastapi import Depends
+
+# Use absolute paths for imports
+from src.database.db_manager import DatabaseManager
+from src.core.interfaces import IDatabaseManager
+from src.config import Settings
+from src.intelligence.agent_kit.wallet_provider import PrivyWalletProvider, EvmWalletProvider # Import base too
+from src.chat.history_manager import ChatHistoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -64,11 +69,13 @@ class AgentManager:
         self.wallet_data_dir = config.wallet_data_dir or "./data/wallets"
         
         # Initialize direct instances instead of using getters
-        self.db_manager = DatabaseManager()  # Direct init instead of get_db_manager()
-        self.history_manager = ChatHistoryManager(db_manager=self.db_manager)  # Direct init
+        db_manager: Optional[IDatabaseManager] = None
+        self.db_manager: Optional[IDatabaseManager] = db_manager
+        self.history_manager = ChatHistoryManager(self.db_manager)  # Direct init
         
         # Initialize PrivyWalletProvider instead of CDP wallet provider
-        self.wallet_provider = PrivyWalletProvider.get_instance(config)
+        wallet_provider: Optional[EvmWalletProvider] = None
+        self.wallet_provider: Optional[EvmWalletProvider] = wallet_provider
 
         self.service = None  # Initialize as None
 
@@ -259,3 +266,11 @@ class AgentManager:
         """Set the AgentKitService after initialization"""
         self.service = service
         # Any initialization that depends on service should be here 
+
+    def set_db_manager(self, db_manager: IDatabaseManager):
+        self.db_manager = db_manager
+        # Update chat history manager if db_manager changes
+        self.chat_history_manager = ChatHistoryManager(self.db_manager)
+
+    def set_wallet_provider(self, wallet_provider: EvmWalletProvider):
+        self.wallet_provider = wallet_provider 

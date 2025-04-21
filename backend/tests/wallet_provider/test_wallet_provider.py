@@ -1,8 +1,11 @@
 import asyncio
 import logging
 import pytest
-from rebalancr.intelligence.agent_kit.wallet_provider import PrivyWalletProvider
-from rebalancr.config import Settings
+from pytest import fixture
+
+# Fix import path
+from src.intelligence.agent_kit.wallet_provider import PrivyWalletProvider
+from src.config import Settings
 
 # Configure logging
 logging.basicConfig(

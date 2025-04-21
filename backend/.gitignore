@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*./__pycache__/
+
+*.egg-info/
+*.egg
+.pytest_cache/
+
+src/__pycache__/
+src/*.py[cod]
+src/*$py.class
+src/*.so
+src/*.egg-info/
+src/*.egg
+
+
+# Ignore all __pycache__ directories
+__pycache__/
+**/__pycache__/
+**/*/__pycache__/
+*.py[cod]
+*$py.class

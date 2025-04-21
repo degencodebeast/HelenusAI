@@ -16,95 +16,49 @@ from coinbase_agentkit.action_providers.action_provider import ActionProvider
 from coinbase_agentkit.network import Network
 from coinbase_agentkit.wallet_providers import EvmWalletProvider
 
-# Use TYPE_CHECKING for circular import prevention
-if TYPE_CHECKING:
-    from rebalancr.intelligence.intelligence_engine import IntelligenceEngine
-else:
-    # For runtime, just use Any
-    IntelligenceEngine = Any
+# Remove TYPE_CHECKING block and direct imports from lower layers
+# if TYPE_CHECKING:
+#     from src.execution.providers.intelligence.intelligence_engine import IntelligenceEngine
+# else:
+#     # For runtime, just use Any
+#     IntelligenceEngine = Any
+# from src.execution.providers.intelligence.reviewer import TradeReviewer
+# from src.execution.providers.strategy.engine import StrategyEngine
+# from src.execution.providers.performance.analyzer import PerformanceAnalyzer
+# from src.database.db_manager import DatabaseManager
 
-from rebalancr.intelligence.reviewer import TradeReviewer
-from rebalancr.strategy.engine import StrategyEngine
-from rebalancr.performance.analyzer import PerformanceAnalyzer
-from rebalancr.database.db_manager import DatabaseManager
-from rebalancr.execution.providers.kuru.kuru_action_provider import KuruActionProvider
+# Keep Kuru provider import (as it's in the same layer or uses its own interface)
+from src.execution.providers.kuru.kuru_action_provider import KuruActionProvider
+
+# Import Interfaces from core
+from src.core.interfaces import (
+    IRebalancer, ITradeExecutionProvider, # Existing
+    IIntelligenceEngine, ITradeReviewer, IStrategyEngine, # Added
+    IPerformanceAnalyzer, IDatabaseManager, IKuruTradeExecutionProvider # Added
+)
+
+# Import the moved models from core
+from src.core.models import (
+    AnalyzePortfolioParams, ExecuteRebalanceParams, SimulateRebalanceParams,
+    GetPerformanceParams, EnableAutoRebalanceParams, DisableAutoRebalanceParams,
+    GetRebalancingStatusParams
+)
 
 logger = logging.getLogger(__name__)
 
-# Supported networks for the rebalancer
-SUPPORTED_NETWORKS = [1, 56, 137, 42161, 10, 10143]  # Ethereum, BSC, Polygon, Arbitrum, Optimism
+# Supported networks for the rebalancer - MOVE this to core/constants.py
+# SUPPORTED_NETWORKS = [1, 56, 137, 42161, 10, 10143]  # Ethereum, BSC, Polygon, Arbitrum, Optimism
+# Import from constants instead
+from src.core.constants import SUPPORTED_NETWORKS
 
-class AnalyzePortfolioParams(BaseModel):
-    """Parameters for portfolio analysis"""
-    portfolio_id: int
-    user_id: str = "current_user"
-    include_sentiment: bool = True
-    include_manipulation_check: bool = True
-    
-class ExecuteRebalanceParams(BaseModel):
-    """Parameters for executing a portfolio rebalance"""
-    portfolio_id: int
-    user_id: str = "current_user"
-    dry_run: bool = False  # If True, analyze but don't execute
-    max_slippage_percent: float = Field(ge=0.1, le=5.0, default=1.0)
-    
-    @validator('max_slippage_percent')
-    def validate_slippage(cls, v):
-        if v < 0.1 or v > 5.0:
-            raise ValueError('Slippage must be between 0.1% and 5.0%')
-        return v
-        
-class SimulateRebalanceParams(BaseModel):
-    """Parameters for simulating a portfolio rebalance"""
-    portfolio_id: int
-    user_id: str = "current_user"
-    target_allocations: Dict[str, float] = Field(default_factory=dict)
-    
-    @root_validator(skip_on_failure=True)
-    def validate_allocations(cls, values):
-        allocations = values.get('target_allocations', {})
-        if not allocations:
-            raise ValueError('Target allocations must be provided')
-            
-        total = sum(allocations.values())
-        if abs(total - 1.0) > 0.01:  # Allow small rounding errors
-            raise ValueError(f'Target allocations must sum to 1.0 (got {total})')
-            
-        return values
+# Remove local Pydantic model definitions (they are now in core/models.py)
+# class AnalyzePortfolioParams(BaseModel):
+#     ... (removed) ...
+# class GetRebalancingStatusParams(BaseModel):
+#     ... (removed) ...
 
-class GetPerformanceParams(BaseModel):
-    """Parameters for getting performance metrics"""
-    portfolio_id: Optional[int] = None
-    days: int = Field(ge=1, le=365, default=30)
-    include_recommendations: bool = True
-    
-    @validator('days')
-    def validate_days(cls, v):
-        if v < 1 or v > 365:
-            raise ValueError('Days must be between 1 and 365')
-        return v
-
-class EnableAutoRebalanceParams(BaseModel):
-    """Parameters for enabling automatic rebalancing"""
-    portfolio_name: str = "main"
-    frequency: str = "daily"  # hourly, daily, weekly, monthly
-    max_slippage: float = Field(ge=0.1, le=5.0, default=1.0)
-    
-    @validator('max_slippage')
-    def validate_slippage(cls, v):
-        if v < 0.1 or v > 5.0:
-            raise ValueError('Slippage must be between 0.1% and 5.0%')
-        return v
-        
-class DisableAutoRebalanceParams(BaseModel):
-    """Parameters for disabling automatic rebalancing"""
-    portfolio_name: str = "main"
-    
-class GetRebalancingStatusParams(BaseModel):
-    """Parameters for getting rebalancing status"""
-    portfolio_name: str = "main"
-
-class RebalancerActionProvider(ActionProvider[EvmWalletProvider]):
+# Implement both interfaces
+class RebalancerActionProvider(ActionProvider[EvmWalletProvider], IRebalancer, ITradeExecutionProvider):
     """
     Action provider for portfolio rebalancing
     
@@ -117,23 +71,25 @@ class RebalancerActionProvider(ActionProvider[EvmWalletProvider]):
     def __init__(
         self,
         wallet_provider: EvmWalletProvider,
-        intelligence_engine: IntelligenceEngine = None,
-        strategy_engine: StrategyEngine = None,
-        trade_reviewer: TradeReviewer = None,
-        performance_analyzer: PerformanceAnalyzer = None,
-        db_manager: DatabaseManager = None,
-        kuru_provider: KuruActionProvider = None,
+        # Update type hints to use interfaces
+        intelligence_engine: Optional[IIntelligenceEngine] = None,
+        strategy_engine: Optional[IStrategyEngine] = None,
+        trade_reviewer: Optional[ITradeReviewer] = None,
+        performance_analyzer: Optional[IPerformanceAnalyzer] = None,
+        db_manager: Optional[IDatabaseManager] = None,
+        kuru_provider: Optional[IKuruTradeExecutionProvider] = None, # Use interface for Kuru too
         context: Dict[str, Any] = None,
         config: Dict[str, Any] = None
     ):
         super().__init__("rebalancer", [])
         self.wallet_provider = wallet_provider
-        self.intelligence_engine = intelligence_engine
-        self.strategy_engine = strategy_engine
-        self.trade_reviewer = trade_reviewer
-        self.performance_analyzer = performance_analyzer
-        self.db_manager = db_manager
-        self.kuru_provider = kuru_provider
+        # Update internal attribute types
+        self.intelligence_engine: Optional[IIntelligenceEngine] = intelligence_engine
+        self.strategy_engine: Optional[IStrategyEngine] = strategy_engine
+        self.trade_reviewer: Optional[ITradeReviewer] = trade_reviewer
+        self.performance_analyzer: Optional[IPerformanceAnalyzer] = performance_analyzer
+        self.db_manager: Optional[IDatabaseManager] = db_manager
+        self.kuru_provider: Optional[IKuruTradeExecutionProvider] = kuru_provider
         self.context = context or {"user_id": "current_user"}
         self.config = config
         
@@ -790,30 +746,14 @@ class RebalancerActionProvider(ActionProvider[EvmWalletProvider]):
             # Default to a known liquid market
             return "mon-usdc"
 
-    # Add setter methods for late binding
-    def set_intelligence_engine(self, intelligence_engine: IntelligenceEngine):
-        self.intelligence_engine = intelligence_engine
-    
-    def set_strategy_engine(self, strategy_engine: StrategyEngine):
-        self.strategy_engine = strategy_engine
-    
-    def set_trade_reviewer(self, trade_reviewer: TradeReviewer):
-        self.trade_reviewer = trade_reviewer
-    
-    def set_performance_analyzer(self, performance_analyzer: PerformanceAnalyzer):
-        self.performance_analyzer = performance_analyzer
-    
-    def set_db_manager(self, db_manager: DatabaseManager):
-        self.db_manager = db_manager
-
 def rebalancer_action_provider(
     wallet_provider: Optional[EvmWalletProvider] = None,
-    intelligence_engine = None,
-    strategy_engine = None,
-    trade_reviewer = None,
-    performance_analyzer = None,
-    db_manager = None,
-    kuru_provider = None,
+    intelligence_engine: Optional[IIntelligenceEngine] = None,
+    strategy_engine: Optional[IStrategyEngine] = None,
+    trade_reviewer: Optional[ITradeReviewer] = None,
+    performance_analyzer: Optional[IPerformanceAnalyzer] = None,
+    db_manager: Optional[IDatabaseManager] = None,
+    kuru_provider: Optional[IKuruTradeExecutionProvider] = None,
     context: Optional[Dict[str, Any]] = None,
     config: Optional[Dict[str, Any]] = None
 ) -> RebalancerActionProvider:

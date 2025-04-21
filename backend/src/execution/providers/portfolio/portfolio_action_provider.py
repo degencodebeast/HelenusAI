@@ -16,18 +16,12 @@ from coinbase_agentkit.action_providers.action_provider import ActionProvider
 from coinbase_agentkit.network import Network
 from coinbase_agentkit.wallet_providers import EvmWalletProvider
 
-from typing import TYPE_CHECKING, Any
-if TYPE_CHECKING:
-    from rebalancr.intelligence.intelligence_engine import IntelligenceEngine
-else:
-    # For runtime, just use Any
-    IntelligenceEngine = Any
-
-
-from rebalancr.strategy.engine import StrategyEngine
-from rebalancr.strategy.risk_manager import RiskManager
-from rebalancr.strategy.yield_optimizer import YieldOptimizer
-from rebalancr.performance.analyzer import PerformanceAnalyzer
+# Change relative imports to absolute from src
+from src.core.interfaces import (
+    IIntelligenceEngine, IStrategyEngine, 
+    IPerformanceAnalyzer, IDatabaseManager, 
+    IRiskManager, IYieldOptimizer
+)
 
 logger = logging.getLogger(__name__)
 
@@ -112,12 +106,12 @@ class PortfolioActionProvider(ActionProvider):
     def __init__(
         self,
         wallet_provider: EvmWalletProvider,
-        intelligence_engine: IntelligenceEngine,
-        strategy_engine: StrategyEngine,
-        risk_manager: RiskManager,
-        yield_optimizer: YieldOptimizer,
-        performance_analyzer: PerformanceAnalyzer,
-        db_manager,
+        intelligence_engine: IIntelligenceEngine,
+        strategy_engine: IStrategyEngine,
+        risk_manager: IRiskManager,
+        yield_optimizer: IYieldOptimizer,
+        performance_analyzer: IPerformanceAnalyzer,
+        db_manager: IDatabaseManager,
         config: Dict[str, Any]
     ):
         super().__init__(
@@ -125,12 +119,12 @@ class PortfolioActionProvider(ActionProvider):
             action_providers=[]  # Empty list since actions are defined using decorators 
         )
         self.wallet_provider = wallet_provider
-        self.intelligence_engine = intelligence_engine
-        self.strategy_engine = strategy_engine
-        self.risk_manager = risk_manager
-        self.yield_optimizer = yield_optimizer
-        self.performance_analyzer = performance_analyzer
-        self.db_manager = db_manager
+        self.intelligence_engine: IIntelligenceEngine = intelligence_engine
+        self.strategy_engine: IStrategyEngine = strategy_engine
+        self.risk_manager: IRiskManager = risk_manager
+        self.yield_optimizer: IYieldOptimizer = yield_optimizer
+        self.performance_analyzer: IPerformanceAnalyzer = performance_analyzer
+        self.db_manager: IDatabaseManager = db_manager
         self.config = config
     
     def supports_network(self, network_id: int) -> bool:
@@ -645,12 +639,12 @@ class PortfolioActionProvider(ActionProvider):
 
 def portfolio_action_provider(
     wallet_provider: EvmWalletProvider,
-    intelligence_engine: IntelligenceEngine, 
-    strategy_engine: StrategyEngine,
-    risk_manager: RiskManager,
-    yield_optimizer: YieldOptimizer,
-    performance_analyzer: PerformanceAnalyzer,
-    db_manager,
+    intelligence_engine: IIntelligenceEngine, 
+    strategy_engine: IStrategyEngine,
+    risk_manager: IRiskManager,
+    yield_optimizer: IYieldOptimizer,
+    performance_analyzer: IPerformanceAnalyzer,
+    db_manager: IDatabaseManager,
     config: Dict[str, Any]
 ) -> PortfolioActionProvider:
     """Create a PortfolioActionProvider instance"""

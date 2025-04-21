@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "rebalancr"
+name = "helenusAI"
 version = "0.1.0"
 description = "Portfolio rebalancing with AI and statistical methods"
 authors = ["Your Name <your.email@example.com>"]
 readme = "README.md"
-packages = [{include = "rebalancr"}]
+packages = [{include = "src"}]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
@@ -34,6 +34,9 @@ black = ">=23.3.0"
 isort = ">=5.12.0"
 pylint = ">=2.17.2"
 mypy = ">=1.2.0"
+eth-account = ">=0.11.0"
+web3 = ">=6.11.0"
+pytest-asyncio = ">=0.21.0"
 
 [build-system]
 requires = ["poetry-core"]
@@ -41,6 +44,9 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = [
+    "src"
+]
 
 [tool.black]
 line-length = 88

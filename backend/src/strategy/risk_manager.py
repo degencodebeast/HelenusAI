@@ -2,9 +2,13 @@ import logging
 from typing import Dict, List, Any
 import numpy as np
 
+# Import the new interface
+from ..core.interfaces import IRiskManager, IDatabaseManager
+
 logger = logging.getLogger(__name__)
 
-class RiskManager:
+# Make RiskManager implement IRiskManager
+class RiskManager(IRiskManager):
     """
     Manages portfolio risk based on statistical metrics.
     
@@ -12,8 +16,9 @@ class RiskManager:
     methods for risk assessment and management.
     """
     
-    def __init__(self, db_manager, config):
-        self.db_manager = db_manager
+    # Update db_manager type hint to use interface
+    def __init__(self, db_manager: IDatabaseManager, config):
+        self.db_manager: IDatabaseManager = db_manager
         self.config = config
         
     async def assess_portfolio_risk(self, portfolio_id: int) -> Dict[str, Any]:

@@ -1,8 +1,9 @@
 import asyncio
 import logging
 import pytest
-from rebalancr.config import Settings
-from rebalancr.intelligence.agent_kit.wallet_provider import PrivyWalletProvider
+#from eth_account.messages import encode_defunct
+from src.config import Settings
+from src.intelligence.agent_kit.wallet_provider import PrivyWalletProvider
 from web3 import Web3
 
 # Configure logging

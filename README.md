@@ -4,7 +4,7 @@
 ![Allora](https://img.shields.io/badge/Allora-Powered-orange)
 <!-- ![Kuru](https://img.shields.io/badge/Kuru-Integrated-blue) -->
 
-> AI-powered portfolio rebalancing protocol built natively for Polygon
+> AI-powered portfolio rebalancing protocol built natively for Monad
 
 ## 🎯 Problem Statement
 

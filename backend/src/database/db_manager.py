@@ -5,10 +5,16 @@ import os
 from pathlib import Path
 import logging
 import asyncio
+from typing import Dict, Any, List, Optional
+import json
+
+# Import interface using absolute path
+from src.core.interfaces import IDatabaseManager
+# from .db_migration import DBMigration # Keep relative for sibling module
 
 logger = logging.getLogger(__name__)
 
-class DatabaseManager:
+class DatabaseManager(IDatabaseManager):
     def __init__(self, db_path=None):
         # Use the standard path by default
         if db_path is None:
@@ -22,7 +28,7 @@ class DatabaseManager:
         self._pool = None
         self._lock = asyncio.Lock()
         
-    async def initialize(self):
+    async def initialize(self) -> None:
         """Initialize the database - to be called during app startup"""
         # Create tables
         await self._create_tables()
@@ -58,7 +64,7 @@ class DatabaseManager:
                 await self._pool.close()
                 self._pool = None
     
-    async def _create_tables(self):
+    async def _create_tables(self) -> None:
         """Create all necessary tables if they don't exist"""
         logger.info("Creating database tables...")
         conn = await self._get_connection()
@@ -331,7 +337,7 @@ class DatabaseManager:
             logger.error(f"Error getting user conversations: {str(e)}")
             return []  # Return empty list on failure
 
-    async def get_active_portfolios(self):
+    async def get_active_portfolios(self) -> List[Dict[str, Any]]:
         """Get all active portfolios from the database"""
         conn = await self._get_connection()
         try:
@@ -357,7 +363,7 @@ class DatabaseManager:
             logger.error(f"Error getting active portfolios: {str(e)}")
             return []
 
-    async def get_portfolios_with_settings(self):
+    async def get_portfolios_with_settings(self) -> List[Dict[str, Any]]:
         """Get all portfolios with rebalancing settings and user external IDs"""
         conn = await self._get_connection()
         try:
@@ -380,7 +386,7 @@ class DatabaseManager:
             logger.error(f"Error getting portfolios with settings: {str(e)}")
             return []
 
-    async def update_portfolio(self, portfolio_id, update_data):
+    async def update_portfolio(self, portfolio_id: int, update_data: Dict[str, Any]) -> None:
         """Update portfolio settings including auto-rebalance options"""
         conn = await self._get_connection()
         try:
@@ -408,7 +414,7 @@ class DatabaseManager:
             logger.error(f"Error updating portfolio {portfolio_id}: {str(e)}")
             return False
 
-    async def log_portfolio_event(self, portfolio_id, event_type, details=None):
+    async def log_portfolio_event(self, portfolio_id: int, event_type: str, details: Optional[str] = None) -> None:
         """Log a portfolio event in the database"""
         conn = await self._get_connection()
         try:
@@ -444,7 +450,7 @@ class DatabaseManager:
             logger.error(f"Error logging portfolio event: {str(e)}")
             return None
 
-    async def get_user_portfolios(self, user_id):
+    async def get_user_portfolios(self, user_id: str) -> List[Dict[str, Any]]:
         """Get all portfolios for a specific user"""
         conn = await self._get_connection()
         try:
@@ -482,7 +488,7 @@ class DatabaseManager:
             logger.error(f"Error getting user portfolios: {str(e)}")
             return []
 
-    async def get_portfolio(self, portfolio_id):
+    async def get_portfolio(self, portfolio_id: int) -> Optional[Dict[str, Any]]:
         """Get a specific portfolio by ID with all its details"""
         conn = await self._get_connection()
         try:
@@ -606,3 +612,12 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error getting portfolio events: {str(e)}")
             return []
+
+    async def get_asset_historical_data(self, symbol: str, days: int = 30) -> List[Dict[str, Any]]:
+        """Fetch historical data for an asset (Placeholder)"""
+        # This needs to be implemented to fetch data from a real source
+        # For now, returning an empty list
+        logger.warning(f"Fetching historical data for {symbol} (placeholder)")
+        # Example structure: 
+        # return [{"timestamp": "2023-01-01T00:00:00Z", "price": 16000}, ...]
+        return []

@@ -15,10 +15,10 @@ from coinbase_agentkit.action_providers.action_provider import ActionProvider
 from coinbase_agentkit.network import Network
 from coinbase_agentkit.wallet_providers import EvmWalletProvider
 
-from rebalancr.intelligence.allora.client import AlloraClient
-from rebalancr.intelligence.market_analysis import MarketAnalyzer
-from rebalancr.intelligence.market_data import MarketDataAnalyzer
-from rebalancr.intelligence.market_conditions import MarketConditionClassifier
+from src.intelligence.allora.client import AlloraClient
+from src.intelligence.market_analysis import MarketAnalyzer
+from src.intelligence.market_data import MarketDataAnalyzer
+from src.intelligence.market_conditions import MarketConditionClassifier
 
 logger = logging.getLogger(__name__)
 

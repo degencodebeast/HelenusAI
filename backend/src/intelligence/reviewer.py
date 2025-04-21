@@ -12,6 +12,9 @@ import aiohttp
 from pydantic import BaseModel, Field
 from datetime import datetime
 
+# Import the interface
+from ..core.interfaces import ITradeReviewer
+
 logger = logging.getLogger(__name__)
 
 class ReviewRequest(BaseModel):
@@ -36,7 +39,7 @@ class ReviewResult(BaseModel):
     risk_score: int = Field(ge=1, le=10)
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
 
-class TradeReviewer:
+class TradeReviewer(ITradeReviewer):
     """
     AI-based trade validator that provides a second opinion on trades/rebalancing.
     
@@ -50,7 +53,7 @@ class TradeReviewer:
         self.api_key = self.config.get("REVIEWER_API_KEY", "")
         self.api_url = self.config.get("REVIEWER_API_URL", "")
         
-    async def review_trade(self, trade_data: Dict[str, Any]) -> ReviewResult:
+    async def review_trade(self, trade_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Review a potential trade or rebalancing action
         
@@ -60,6 +63,7 @@ class TradeReviewer:
         Returns:
             ReviewResult with approval and reasoning
         """
+        result: ReviewResult
         try:
             # Convert to ReviewRequest for validation
             request = ReviewRequest(
@@ -77,20 +81,23 @@ class TradeReviewer:
             
             # Use external AI if configured
             if self.use_external_ai and self.api_key and self.api_url:
-                return await self._external_review(request)
+                result = await self._external_review(request)
             else:
                 # Otherwise use rule-based review
-                return await self._rule_based_review(request)
+                result = await self._rule_based_review(request)
+                
+            return result.dict()
                 
         except Exception as e:
             logger.error(f"Review failed: {str(e)}")
-            return ReviewResult(
+            result = ReviewResult(
                 asset=trade_data.get("asset", "unknown"),
                 approval=False,
                 confidence=0.0,
                 reasoning=f"Review failed: {str(e)}",
                 risk_score=10  # Maximum risk on failure
             )
+            return result.dict()
     
     async def _external_review(self, request: ReviewRequest) -> ReviewResult:
         """Use external AI service for review"""
@@ -244,10 +251,11 @@ class TradeReviewer:
             risk_score=risk_score
         )
         
-    async def bulk_review(self, trades: List[Dict[str, Any]]) -> List[ReviewResult]:
+    async def bulk_review(self, trades: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Review multiple trades in parallel"""
         tasks = [self.review_trade(trade) for trade in trades]
-        return await asyncio.gather(*tasks)
+        results_as_dict: List[Dict[str, Any]] = await asyncio.gather(*tasks)
+        return results_as_dict
         
     async def validate_rebalance_plan(
         self, 
@@ -283,15 +291,15 @@ class TradeReviewer:
         
         # Calculate overall approval
         num_assets = len(assets)
-        num_approved = sum(1 for r in results if r.approval)
+        num_approved = sum(1 for r in results if r.get("approval", False))
         
         # Calculate weighted risk score
-        overall_risk = sum(r.risk_score for r in results) / len(results) if results else 10
+        overall_risk = sum(r.get("risk_score", 10) for r in results) / len(results) if results else 10
         
         return {
             "approved": num_approved == num_assets,
             "approval_rate": num_approved / num_assets if num_assets > 0 else 0,
             "overall_risk": overall_risk,
-            "results": [r.dict() for r in results],
+            "results": results,
             "timestamp": datetime.now().isoformat()
         } 

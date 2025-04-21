@@ -2,6 +2,7 @@
 
 import json
 import logging
+import asyncio
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Union
 
@@ -12,6 +13,9 @@ from coinbase_agentkit.action_providers.action_decorator import create_action
 from coinbase_agentkit.action_providers.action_provider import ActionProvider
 from coinbase_agentkit.network import Network
 from coinbase_agentkit.wallet_providers import EvmWalletProvider
+
+# Import the interface using absolute path from src root
+from src.core.interfaces import IKuruTradeExecutionProvider
 
 from .schemas import (
     SwapParams, 
@@ -43,7 +47,7 @@ from .utils import approve_token, format_amount_from_decimals, format_amount_wit
 # Set up logging
 logger = logging.getLogger(__name__)
 
-class KuruActionProvider(ActionProvider[EvmWalletProvider]):
+class KuruActionProvider(ActionProvider[EvmWalletProvider], IKuruTradeExecutionProvider):
     """Provides actions for interacting with Kuru DEX through direct contract calls."""
 
     def __init__(self, 
@@ -1079,6 +1083,38 @@ Important notes:
             return f"Successfully connected to {network_id} (chain ID: {chain_id}). Current block number: {block_number}"
         except Exception as e:
             return f"Connected to RPC but failed to get block number: {str(e)}"
+
+    # --- Async Interface Methods Implementation (Placeholders) ---
+    # These methods from ITradeExecutionProvider are async, but Kuru provider primarily uses sync AgentKit actions.
+    # Implementations below are placeholders and would need proper async logic, potentially wrapping sync actions.
+    
+    async def execute_buy(self, user_id: str, symbol: str, amount: float, max_slippage_percent: float, order_type: str = 'market', price: Optional[float] = None) -> Dict[str, Any]:
+        logger.warning("Async execute_buy not implemented for KuruActionProvider, use AgentKit actions.")
+        # Placeholder: In a real scenario, might construct args and call a sync action wrapper
+        # or implement direct async contract interaction if feasible outside AgentKit actions.
+        await asyncio.sleep(0) # Minimal async behavior
+        return {"error": "Async buy not implemented for Kuru provider"}
+
+    async def execute_sell(self, user_id: str, symbol: str, amount: float, max_slippage_percent: float, order_type: str = 'market', price: Optional[float] = None) -> Dict[str, Any]:
+        logger.warning("Async execute_sell not implemented for KuruActionProvider, use AgentKit actions.")
+        await asyncio.sleep(0)
+        return {"error": "Async sell not implemented for Kuru provider"}
+
+    async def execute_swap(self, user_id: str, from_token: str, to_token: str, amount_in: float, max_slippage_percent: float, market_id: str) -> Dict[str, Any]:
+        logger.warning("Async execute_swap called on KuruActionProvider. Consider using sync 'swap' action.")
+        # Could potentially wrap the sync swap action here if needed
+        # Example: Find appropriate wallet_provider based on user_id (complex)
+        # args = { ... construct args ... }
+        # result_str = self.swap(wallet_provider, args)
+        # return { "result": result_str } # Parse string? 
+        await asyncio.sleep(0)
+        return {"error": "Async swap potentially wrapped, but needs wallet provider context"}
+
+    async def get_current_price(self, symbol: str) -> float:
+        logger.warning("Async get_current_price not implemented for KuruActionProvider.")
+        # Needs logic to determine network/market from symbol and query blockchain/API
+        await asyncio.sleep(0)
+        return 0.0 # Placeholder
 
 def kuru_action_provider(
     rpc_url_by_chain_id: Optional[Dict[int, str]] = None,

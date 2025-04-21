@@ -2,31 +2,44 @@ import asyncio
 import logging
 from typing import Dict, List, Any, Optional, Union, TYPE_CHECKING
 from datetime import datetime, timedelta
+import numpy as np
+import pandas as pd
+import json
 
+# Import interfaces
+from ..core.interfaces import IStrategyEngine, IDatabaseManager, IIntelligenceEngine
+
+# Keep local imports for sub-components if no interfaces are defined for them yet
 from .risk_manager import RiskManager
 from .yield_optimizer import YieldOptimizer
 from .wormhole import WormholeService
 
-# Use TYPE_CHECKING to break circular import
-if TYPE_CHECKING:
-    from ..intelligence.intelligence_engine import IntelligenceEngine
+# Remove TYPE_CHECKING block for IntelligenceEngine as it's now imported via interface
+# if TYPE_CHECKING:
+#     from ..intelligence.intelligence_engine import IntelligenceEngine
 
 logger = logging.getLogger(__name__)
 
-class StrategyEngine:
+class StrategyEngine(IStrategyEngine):
     """
     Core strategy execution engine that implements rebalancing execution
     based on decisions from the Intelligence Engine, focusing purely on
     statistical analysis as recommended by Rose Heart.
     """
     
-    def __init__(self):
-        self.intelligence_engine = None  # Will be set later
-        self.risk_manager = None
-        self.yield_optimizer = None
-        self.wormhole_service = None
-        self.db_manager = None
-        self.config = None
+    def __init__(self, 
+                 db_manager: Optional[IDatabaseManager] = None,
+                 intelligence_engine: Optional[IIntelligenceEngine] = None,
+                 risk_manager: Optional[RiskManager] = None,
+                 yield_optimizer: Optional[YieldOptimizer] = None,
+                 wormhole_service: Optional[WormholeService] = None,
+                 config: Optional[Dict[str, Any]] = None):
+        self.intelligence_engine: Optional[IIntelligenceEngine] = intelligence_engine
+        self.risk_manager: Optional[RiskManager] = risk_manager or RiskManager()
+        self.yield_optimizer: Optional[YieldOptimizer] = yield_optimizer
+        self.wormhole_service: Optional[WormholeService] = wormhole_service
+        self.db_manager: Optional[IDatabaseManager] = db_manager
+        self.config: Optional[Dict[str, Any]] = config
         
         # Asset-specific profiles following Rose Heart's recommendation
         self.asset_profiles = {
@@ -75,20 +88,23 @@ class StrategyEngine:
             }
         }
     
-    def set_intelligence_engine(self, intelligence_engine):
-        """Set the intelligence engine after initialization"""
-        self.intelligence_engine = intelligence_engine
-    
     async def analyze_portfolio_statistics(self, portfolio_id: int) -> Dict[str, Any]:
         """
         Pure statistical analysis of portfolio without decision making.
         This provides metrics for the Intelligence Engine to consume.
         """
+        if not self.db_manager or not self.risk_manager:
+             logger.warning("StrategyEngine requires db_manager and risk_manager for analysis.")
+             return {"error": "Missing dependencies"}
+             
         try:
-            # Get portfolio data
+            # Get portfolio data using the interface attribute
             portfolio = await self.db_manager.get_portfolio(portfolio_id)
+            if not portfolio:
+                return {"error": f"Portfolio {portfolio_id} not found"}
             
             # Get risk assessment - purely statistical as Rose Heart advised
+            # Assuming risk_manager doesn't need interface yet
             risk_assessment = await self.risk_manager.assess_portfolio_risk(portfolio_id)
             
             # Calculate asset metrics
@@ -123,6 +139,10 @@ class StrategyEngine:
         Execute portfolio rebalancing based on recommendations from Intelligence Engine.
         This focuses purely on execution, not decision making.
         """
+        if not self.db_manager:
+             logger.warning("StrategyEngine requires db_manager for execution.")
+             return {"error": "Missing db_manager dependency"}
+             
         try:
             # Validate recommendation
             if not recommendation.get("rebalance_recommended", False):
@@ -146,21 +166,28 @@ class StrategyEngine:
             # Get target allocations from recommendation
             target_allocations = recommendation.get("target_allocations", {})
             
-            # Get current portfolio 
+            # Get current portfolio using the interface attribute
             portfolio = await self.db_manager.get_portfolio(portfolio_id)
+            if not portfolio:
+                return {"error": f"Portfolio {portfolio_id} not found"}
             
             # Calculate required trades
             trades = await self._calculate_required_trades(portfolio, target_allocations)
             
-            # Execute trades
+            # Execute trades (assuming _execute_trades uses external providers or self.wormhole_service)
             executed_trades = await self._execute_trades(trades)
             
-            # Update portfolio in database
-            await self.db_manager.update_portfolio_after_rebalance(
-                portfolio_id, 
-                executed_trades, 
-                target_allocations
-            )
+            # Update portfolio in database using the interface attribute
+            # Assuming a method exists like update_portfolio_after_rebalance 
+            # This might need adjustments based on the exact IDatabaseManager methods
+            # For now, we use the general update_portfolio method
+            # await self.db_manager.update_portfolio_after_rebalance(
+            #     portfolio_id, 
+            #     executed_trades, 
+            #     target_allocations
+            # )
+            await self.db_manager.log_portfolio_event(portfolio_id, "rebalance_executed", json.dumps({"trades": executed_trades, "allocations": target_allocations}))
+            logger.info(f"Portfolio {portfolio_id} rebalance executed (DB update needs refinement)")
             
             return {
                 "portfolio_id": portfolio_id,
@@ -205,6 +232,10 @@ class StrategyEngine:
     
     async def _calculate_asset_metrics(self, portfolio) -> Dict[str, Any]:
         """Calculate statistical metrics for each asset in the portfolio"""
+        if not self.db_manager:
+             logger.warning("StrategyEngine requires db_manager for asset metrics.")
+             return {}
+             
         asset_metrics = {}
         
         for asset in portfolio.get("assets", []):
@@ -213,7 +244,7 @@ class StrategyEngine:
             # Get asset profile or use default
             profile = self.asset_profiles.get(symbol, self.asset_profiles["DEFAULT"])
             
-            # Get historical data
+            # Get historical data using the interface attribute
             historical_data = await self.db_manager.get_asset_historical_data(symbol)
             
             # Calculate trend
@@ -392,7 +423,7 @@ class StrategyEngine:
         return executed_trades
     
     async def record_trade_performance(self, portfolio_id: int, trades: List[Dict[str, Any]]) -> None:
-        """Record trade performance for future analysis"""
-        # This would be implemented in production to record trade outcomes
-        # for performance analysis and weights adjustment
+        """Record trade performance data (Placeholder - needs PerformanceAnalyzer)"""
+        logger.info(f"Recording trade performance for portfolio {portfolio_id} (placeholder)")
+        # This might call a PerformanceAnalyzer instance if available/injected
         pass

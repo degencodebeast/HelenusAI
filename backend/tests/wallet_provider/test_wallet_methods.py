@@ -3,8 +3,8 @@ import time
 import json
 import logging
 import pytest
-from rebalancr.intelligence.agent_kit.wallet_provider import PrivyWalletProvider
-from rebalancr.config import Settings
+from src.intelligence.agent_kit.wallet_provider import PrivyWalletProvider
+from src.config import Settings
 
 # Configure logging
 logging.basicConfig(

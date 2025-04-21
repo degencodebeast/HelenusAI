@@ -4,21 +4,26 @@ import logging
 from datetime import datetime
 
 import pandas as pd
-# Use TYPE_CHECKING for circular import prevention
-from typing import TYPE_CHECKING
+# No longer need TYPE_CHECKING for AgentKitClient if not injected here
+# from typing import TYPE_CHECKING
 
+# Import Interfaces using absolute paths
+from src.core.interfaces import IIntelligenceEngine, IDatabaseManager, IStrategyEngine
+
+# Keep concrete imports for components without interfaces yet or not injected here
 from .allora.client import AlloraClient
 from .allora.models import SentimentAnalysis, FearGreedIndex, MarketManipulation, RebalanceSignal, AssetAnalysisResult
 from .allora.config import get_asset_profile, AlloraConfig
 from .market_analysis import MarketAnalyzer
 from .market_data import MarketDataAnalyzer
+from .agent_kit.client import AgentKitClient # Keep if used directly and not injected via interface
 
-if TYPE_CHECKING:
-    from .agent_kit.client import AgentKitClient
+# if TYPE_CHECKING:
+#     from .agent_kit.client import AgentKitClient
 
 logger = logging.getLogger(__name__)
 
-class IntelligenceEngine:
+class IntelligenceEngine(IIntelligenceEngine): # Implement interface
     #  Strategy engine that combines AI predictions from Allora
     # with statistical analysis as recommended by Rose Heart.
     """
@@ -30,21 +35,21 @@ class IntelligenceEngine:
     
     def __init__(
         self, 
-        allora_client: AlloraClient,
-        market_analyzer: MarketAnalyzer,
-        agent_kit_client: Optional['AgentKitClient'] = None,
-        market_data_service: Optional[MarketDataAnalyzer] = None,
-        config: Dict[str, Any] = None,
-        db_manager = None,
-        strategy_engine = None
+        allora_client: AlloraClient, # Keep concrete hint
+        market_analyzer: MarketAnalyzer, # Keep concrete hint
+        agent_kit_client: Optional[AgentKitClient] = None, # Keep concrete hint if needed directly
+        market_data_service: Optional[MarketDataAnalyzer] = None, # Keep concrete hint
+        config: Optional[Dict[str, Any]] = None, # Use Optional
+        db_manager: Optional[IDatabaseManager] = None, # Use interface hint
+        strategy_engine: Optional[IStrategyEngine] = None # Use interface hint
     ):
         self.allora_client = allora_client
         self.market_analyzer = market_analyzer
         self.agent_kit_client = agent_kit_client
         self.market_data_service = market_data_service
         self.config = config or {}
-        self.db_manager = db_manager  # Will be set later if None
-        self.strategy_engine = strategy_engine  # Will be set later if None
+        self.db_manager: Optional[IDatabaseManager] = db_manager
+        self.strategy_engine: Optional[IStrategyEngine] = strategy_engine
 
         #  # Map of assets to Allora topic IDs
         # self.topic_mappings = {
@@ -79,14 +84,6 @@ class IntelligenceEngine:
     #     historical_data: Dict[str, Any]
     # ) -> Dict[str, Any]:
     
-    def set_db_manager(self, db_manager):
-        """Set the database manager after initialization"""
-        self.db_manager = db_manager
-        
-    def set_strategy_engine(self, strategy_engine):
-        """Set the strategy engine after initialization"""
-        self.strategy_engine = strategy_engine
-        
     async def analyze_portfolio(self, user_id: str, portfolio_id: int) -> Dict[str, Any]:
         """
         Analyze portfolio and determine if rebalancing is needed
@@ -95,11 +92,17 @@ class IntelligenceEngine:
         - AI for sentiment analysis (Allora)
         - Statistical methods for numerical analysis
         """
+        if not self.db_manager or not self.strategy_engine:
+             logger.warning("IntelligenceEngine requires db_manager and strategy_engine for analysis.")
+             return {"error": "Missing dependencies"}
+             
         try:
-            # Get portfolio data
+            # Get portfolio data using interface attribute
             portfolio = await self.db_manager.get_portfolio(portfolio_id)
+            if not portfolio:
+                return {"error": f"Portfolio {portfolio_id} not found"}
             
-            # Get statistical metrics from Strategy Engine
+            # Get statistical metrics from Strategy Engine using interface attribute
             stats = await self.strategy_engine.analyze_portfolio_statistics(portfolio_id)
             
             # Get sentiment analysis from Allora
@@ -125,7 +128,7 @@ class IntelligenceEngine:
                 stats=stats
             )
             
-            # Calculate rebalancing costs
+            # Calculate rebalancing costs using interface attribute
             rebalancing_costs = await self.strategy_engine.calculate_rebalancing_costs(portfolio)
             
             # Calculate potential benefits based on combined signals
@@ -312,34 +315,18 @@ class IntelligenceEngine:
             
     async def get_portfolio(self, user_id: str, portfolio_id: int) -> Dict[str, Any]:
         """Get portfolio data"""
-        # This would normally fetch from a database
-        # For now, return a mock portfolio
-        return {
-            "id": portfolio_id,
-            "user_id": user_id,
-            "name": "Sample Portfolio",
-            "last_rebalance_timestamp": (datetime.now().replace(day=1)).isoformat(),
-            "assets": [
-                {
-                    "symbol": "BTC",
-                    "amount": 0.5,
-                    "price": 50000,
-                    "value": 25000,
-                    "weight": 0.5
-                },
-                {
-                    "symbol": "ETH",
-                    "amount": 5,
-                    "price": 3000,
-                    "value": 15000,
-                    "weight": 0.3
-                },
-                {
-                    "symbol": "USDC",
-                    "amount": 10000,
-                    "price": 1,
-                    "value": 10000,
-                    "weight": 0.2
-                }
-            ]
-        }
+        # This method uses self.db_manager which is now typed with the interface
+        # Check if db_manager is available
+        if not self.db_manager:
+            logger.warning("Database manager not configured, cannot get portfolio.")
+            return {"error": "Database manager not configured"}
+            
+        try:
+            portfolio_data = await self.db_manager.get_portfolio(portfolio_id)
+            return portfolio_data if portfolio_data else {"error": "Portfolio not found"}
+        except Exception as e:
+            logger.error(f"Error getting portfolio {portfolio_id}: {str(e)}")
+            return {"error": str(e)}
+
+    # Ensure all abstract methods from IIntelligenceEngine are implemented
+    # (analyze_portfolio)

@@ -3,7 +3,9 @@ from typing import Dict, List, Any
 from datetime import datetime
 import uuid
 
-from ..database.db_manager import DatabaseManager
+# Use absolute path for db_manager and interface
+from src.database.db_manager import DatabaseManager
+from src.core.interfaces import IDatabaseManager
 
 logger = logging.getLogger(__name__)
 

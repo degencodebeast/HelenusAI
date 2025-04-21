@@ -1,280 +1,222 @@
 from fastapi import Depends, FastAPI
 import logging
-from typing import List
+from typing import List, Dict, Any, Optional
 
 # from rebalancr.intelligence.reviewer import TradeReviewer
 
-from ..intelligence.intelligence_engine import IntelligenceEngine
-from ..intelligence.market_analysis import MarketAnalyzer
-from ..database.db_manager import DatabaseManager
-from ..intelligence.agent_kit.service import AgentKitService
-from ..intelligence.allora.client import AlloraClient
-from ..strategy.engine import StrategyEngine
-from ..websockets.websocket_manager import WebSocketManager, websocket_manager
-from ..services.chat_service import ChatService
+from src.intelligence.intelligence_engine import IntelligenceEngine
+from src.intelligence.market_analysis import MarketAnalyzer
+from src.database.db_manager import DatabaseManager
+from src.intelligence.agent_kit.service import AgentKitService
+from src.intelligence.allora.client import AlloraClient
+from src.strategy.engine import StrategyEngine
+from src.websockets.websocket_manager import WebSocketManager, websocket_manager
+from src.services.chat_service import ChatService
 
-from ..config import get_settings
-from ..intelligence.agent_kit.wallet_provider import PrivyWalletProvider, get_wallet_provider
+from src.config import get_settings, Settings
+from src.intelligence.agent_kit.wallet_provider import PrivyWalletProvider, get_wallet_provider
 
 # Chat and service imports
-from ..chat.history_manager import ChatHistoryManager
-from ..services.market import MarketDataService
+from src.chat.history_manager import ChatHistoryManager
+from src.services.market import MarketDataService
 
 # Strategy imports
-from ..strategy.risk_manager import RiskManager
-from ..strategy.yield_optimizer import YieldOptimizer
-from ..strategy.wormhole import WormholeService
+from src.strategy.risk_manager import RiskManager
+from src.strategy.yield_optimizer import YieldOptimizer
+from src.strategy.wormhole import WormholeService
 
 # Agent imports
-from ..intelligence.agent_kit.agent_manager import AgentManager
-from ..intelligence.agent_kit.client import AgentKitClient
+from src.intelligence.agent_kit.agent_manager import AgentManager
+from src.intelligence.agent_kit.client import AgentKitClient
 
 # Analytics imports
-from ..performance.analyzer import PerformanceAnalyzer
+from src.performance.analyzer import PerformanceAnalyzer
+
+# Core imports
+from src.intelligence.reviewer import TradeReviewer
+from src.execution.providers.kuru.kuru_action_provider import KuruActionProvider
+from src.execution.providers.rebalancer.rebalancer_action_provider import RebalancerActionProvider
+
+# Interfaces
+from src.core.interfaces import (
+    IDatabaseManager, IIntelligenceEngine, IStrategyEngine, 
+    ITradeReviewer, IPerformanceAnalyzer, IKuruTradeExecutionProvider, 
+    IRebalancer, ITradeExecutionProvider, # Base execution interface
+    IRiskManager, IYieldOptimizer # Add new interfaces
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def create_application_services() -> Dict[str, Any]:
+    """
+    Creates and wires up all application services using Dependency Injection.
+    This is the single composition root.
+    """
+    logger.info("Creating application services...")
+    
+    # 1. Configuration
+    config: Settings = get_settings()
 
-# Singletons
-_db_manager = None
-_allora_client = None
-_strategy_engine = None
-_wallet_provider = None
-_chat_service = None
-_action_registry = None
-_agent_kit_service = None
-_intelligence_engine = None
-_agent_manager = None
-_agent_kit_client = None
-_market_analyzer = None
-_market_data_service = None
-_risk_manager = None
-_yield_optimizer = None
-_wormhole_service = None
-_performance_analyzer = None
-_trade_reviewer = None
+    # 2. Core Components Instantiation
+    db_manager: IDatabaseManager = DatabaseManager(db_path=config.DATABASE_URL)
+    
+    allora_client = AlloraClient(api_key=config.ALLORA_API_KEY) # Keep concrete for now
+    
+    market_analyzer = MarketAnalyzer() # Keep concrete for now
+    
+    market_data_service = MarketDataService(config) # Keep concrete for now
+    
+    # Assumes RiskManager constructor takes (db_manager, config)
+    risk_manager: IRiskManager = RiskManager(db_manager, config) # Keep concrete for now
+    
+    # Assumes YieldOptimizer constructor takes (db_manager, market_data_service, config)
+    yield_optimizer: IYieldOptimizer = YieldOptimizer(db_manager, market_data_service, config) # Keep concrete for now
+    
+    # Assumes WormholeService constructor takes (config)
+    wormhole_service = WormholeService(config) # Keep concrete for now
 
-def get_db_manager():
-    global _db_manager
-    if _db_manager is None:
-        _db_manager = DatabaseManager()
-    return _db_manager
-
-def get_allora_client():
-    global _allora_client
-    if _allora_client is None:
-        config = get_settings()
-        _allora_client = AlloraClient(api_key=config.ALLORA_API_KEY)
-    return _allora_client
-
-def get_strategy_engine():
-    global _strategy_engine
-    if _strategy_engine is None:
-        _strategy_engine = StrategyEngine()
-    return _strategy_engine
-
-def get_agent_kit_service():
-    """Get AgentKitService singleton instance"""
-    from ..intelligence.agent_kit.service import AgentKitService
-    # Just return the existing instance, don't try to create a new one
-    if AgentKitService._instance is None:
-        # Force initialization if not already done
-        initialize_intelligence_services()
-    return AgentKitService.get_instance(config=get_settings()
+    performance_analyzer: IPerformanceAnalyzer = PerformanceAnalyzer(db_manager=db_manager)
+    
+    # Assumes TradeReviewer constructor takes (config)
+    trade_reviewer: ITradeReviewer = TradeReviewer(config=config.dict()) # Pass config as dict if needed
+    
+    strategy_engine: IStrategyEngine = StrategyEngine(
+        db_manager=db_manager, 
+        risk_manager=risk_manager, 
+        yield_optimizer=yield_optimizer, 
+        wormhole_service=wormhole_service,
+        config=config.dict()
+        # intelligence_engine will be set later if needed, but ideally removed
     )
-
-def get_agent_manager():
-    """Get AgentManager singleton instance"""
-    # Lazy import to avoid circular dependency
-    from ..intelligence.agent_kit.agent_manager import AgentManager
-    config = get_settings()
-    return AgentManager.get_instance(config)
-
-def get_agent_kit_client():
-    """Get or create the AgentKitClient instance"""
-    global _agent_kit_client
-    if _agent_kit_client is None:
-        config = get_settings()
-        agent_manager = get_agent_manager()
-        _agent_kit_client = AgentKitClient(config, intelligence_engine=None, agent_manager=agent_manager)
-    return _agent_kit_client
-
-
-def get_chat_history_manager():
-    """Get chat history manager instance"""
-    # Directly create instance rather than using AgentManager
-    from ..chat.history_manager import ChatHistoryManager
-    db_manager = get_db_manager()
-    return ChatHistoryManager(db_manager=db_manager)
-
-def get_websocket_manager():
-    """Get websocket manager singleton"""
-    return websocket_manager  # Use the singleton from import
-
-def get_intelligence_engine():
-    """Get intelligence engine instance"""
-    global _intelligence_engine
-    if _intelligence_engine is None:
-        # Get dependencies
-        config = get_settings()
-        allora_client = get_allora_client()
-        market_analyzer = get_market_analyzer()
-        market_data_service = get_market_data_service()
-        
-        _intelligence_engine = IntelligenceEngine(
+    
+    # Intelligence Engine depends on several components
+    intelligence_engine: IIntelligenceEngine = IntelligenceEngine(
             allora_client=allora_client,
             market_analyzer=market_analyzer,
-            agent_kit_client=None,  # Initialize with None
             market_data_service=market_data_service,
-            config=config
-        )
-        
-        # AFTER both objects are created, connect them
-        agent_kit_client = get_agent_kit_client()
-        agent_kit_client.set_intelligence_engine(_intelligence_engine)
-        _intelligence_engine.agent_kit_client = agent_kit_client
-    return _intelligence_engine
+        config=config.dict(),
+        db_manager=db_manager,
+        strategy_engine=strategy_engine 
+        # agent_kit_client will be set later if needed
+    )
+    # If StrategyEngine still needs IntelligenceEngine (circular dependency)
+    # This should ideally be removed by further refactoring using interfaces/callbacks
+    # strategy_engine.intelligence_engine = intelligence_engine 
 
-def get_chat_service():
-    global _chat_service
-    if _chat_service is None:
-        # Using the AgentManager pattern for chat
-        agent_manager = get_agent_manager()
-        chat_history_manager = get_chat_history_manager()
-        websocket_manager = get_websocket_manager()
-        
-        _chat_service = ChatService(
-            db_manager=get_db_manager(),
+    # 3. Wallet Provider
+    # Assuming PrivyWalletProvider is the primary one and uses singleton pattern internally
+    wallet_provider = PrivyWalletProvider.get_instance(config) 
+
+    # 4. Execution Providers
+    # Kuru provider - constructor takes Optional dicts
+    kuru_provider: IKuruTradeExecutionProvider = KuruActionProvider(
+        # Pass relevant config if needed, e.g., from config.dict() or specific settings
+        # rpc_url_by_chain_id=config.KURU_RPC_URLS, 
+        # margin_account_by_chain=config.KURU_MARGIN_ACCOUNTS
+    ) 
+    
+    rebalancer_provider: IRebalancer = RebalancerActionProvider(
+        wallet_provider=wallet_provider,
+        intelligence_engine=intelligence_engine,
+        strategy_engine=strategy_engine,
+        trade_reviewer=trade_reviewer,
+        performance_analyzer=performance_analyzer,
+        db_manager=db_manager,
+        kuru_provider=kuru_provider,
+        # context=... # Context might need to be set dynamically
+        config=config.dict()
+    )
+
+    # 5. AgentKit Components
+    # AgentManager depends on config, db_manager, wallet_provider
+    agent_manager = AgentManager(
+        config=config,
+        db_manager=db_manager, # Pass the instance
+        wallet_provider=wallet_provider # Pass the instance
+    )
+    # Initialize agent_manager's internal service link if needed (check AgentManager.__init__)
+    # agent_manager.initialize_service_dependency(...) 
+    
+    # AgentKitClient depends on config, agent_manager
+    # If it still needs intelligence_engine, pass it; otherwise, None
+    agent_kit_client = AgentKitClient(
+         config=config.dict(), 
             agent_manager=agent_manager,
-            websocket_manager=websocket_manager
-        )
-    return _chat_service
+         intelligence_engine=intelligence_engine # Pass if needed, ideally remove
+    )
+    # Link intelligence engine back if needed (ideally remove)
+    # intelligence_engine.agent_kit_client = agent_kit_client 
+    
+    # AgentKitService depends on config, wallet_provider, agent_manager
+    # It also needs the action providers (rebalancer, kuru)
+    agent_kit_service = AgentKitService(
+         config=config, 
+         wallet_provider=wallet_provider, 
+         agent_manager=agent_manager,
+         # Pass action providers directly
+         action_providers=[rebalancer_provider, kuru_provider] 
+    )
+    # If AgentManager needs service (circular dependency?)
+    # agent_manager.set_service(agent_kit_service) # Example, check actual method
 
-def get_market_analyzer():
-    global _market_analyzer
-    if _market_analyzer is None:
-        _market_analyzer = MarketAnalyzer()
-    return _market_analyzer
-
-def get_market_data_service():
-    global _market_data_service
-    if _market_data_service is None:
-        config = get_settings()
-        _market_data_service = MarketDataService(config)
-    return _market_data_service
-
-def get_risk_manager():
-    global _risk_manager
-    if _risk_manager is None:
-        config = get_settings()
-        db_manager = get_db_manager()
-        _risk_manager = RiskManager(db_manager, config)
-    return _risk_manager
-
-def get_yield_optimizer():
-    global _yield_optimizer
-    if _yield_optimizer is None:
-        config = get_settings()
-        db_manager = get_db_manager()
-        market_data_service = get_market_data_service()
-        _yield_optimizer = YieldOptimizer(db_manager, market_data_service, config)
-    return _yield_optimizer
-
-def get_wormhole_service():
-    global _wormhole_service
-    if _wormhole_service is None:
-        config = get_settings()
-        _wormhole_service = WormholeService(config)
-    return _wormhole_service
-
-def get_performance_analyzer():
-    global _performance_analyzer
-    if _performance_analyzer is None:
-        config = get_settings()
-        db_manager = get_db_manager()
-        _performance_analyzer = PerformanceAnalyzer(
+    # 6. Other Services
+    chat_history_manager = ChatHistoryManager(db_manager=db_manager) # Keep concrete for now
+    
+    # ChatService depends on db, agent_manager, websocket_manager
+    chat_service = ChatService(
             db_manager=db_manager,
-            #config=config
-        )
-    return _performance_analyzer
+        agent_manager=agent_manager,
+        websocket_manager=websocket_manager # Use imported singleton
+    )
 
-def get_trade_reviewer():
-    from ..intelligence.reviewer import TradeReviewer
-    global _trade_reviewer
-    if _trade_reviewer is None:
-        
-        _trade_reviewer = TradeReviewer()
-    return _trade_reviewer
+    logger.info("Application services created successfully.")
+    
+    # Return all created services in a dictionary
+    return {
+        "config": config,
+        "db_manager": db_manager,
+        "allora_client": allora_client,
+        "market_analyzer": market_analyzer,
+        "market_data_service": market_data_service,
+        "risk_manager": risk_manager,
+        "yield_optimizer": yield_optimizer,
+        "wormhole_service": wormhole_service,
+        "performance_analyzer": performance_analyzer,
+        "trade_reviewer": trade_reviewer,
+        "strategy_engine": strategy_engine,
+        "intelligence_engine": intelligence_engine,
+        "wallet_provider": wallet_provider,
+        "kuru_provider": kuru_provider,
+        "rebalancer_provider": rebalancer_provider,
+        "agent_manager": agent_manager,
+        "agent_kit_client": agent_kit_client,
+        "agent_kit_service": agent_kit_service,
+        "chat_history_manager": chat_history_manager,
+        "chat_service": chat_service,
+        "websocket_manager": websocket_manager # Include existing singleton if needed elsewhere
+    }
 
 def initialize_services(app: FastAPI):
     """Initialize all services and attach to app state"""
     # Initialize core services
-    services = initialize_intelligence_services()
+    services = create_application_services()
     
     # Attach to app state
-    app.state.db_manager = get_db_manager()
-    app.state.allora_client = get_allora_client()
+    app.state.db_manager = services["db_manager"]
+    app.state.allora_client = services["allora_client"]
     app.state.agent_service = services["agent_kit_service"]
     app.state.agent_manager = services["agent_manager"]
     app.state.agent_kit_client = services["agent_kit_client"]
     app.state.intelligence_engine = services["intelligence_engine"]
-    app.state.market_analyzer = get_market_analyzer()
-    app.state.strategy_engine = get_strategy_engine()
-    app.state.market_data_service = get_market_data_service()
-    app.state.risk_manager = get_risk_manager()
-    app.state.yield_optimizer = get_yield_optimizer()
-    app.state.chat_service = get_chat_service()
-    app.state.websocket_manager = get_websocket_manager()
+    app.state.market_analyzer = services["market_analyzer"]
+    app.state.strategy_engine = services["strategy_engine"]
+    app.state.market_data_service = services["market_data_service"]
+    app.state.risk_manager = services["risk_manager"]
+    app.state.yield_optimizer = services["yield_optimizer"]
+    app.state.chat_service = services["chat_service"]
+    app.state.websocket_manager = services["websocket_manager"]
     app.state.wallet_provider = get_wallet_provider()
     
     return app
-
-def initialize_intelligence_services():
-    """Initialize intelligence services and providers in the correct order"""
-    
-    # 1. Initialize basic services 
-    config = get_settings()
-    allora_client = get_allora_client()
-    market_analyzer = get_market_analyzer()
-    market_data_service = get_market_data_service()
-    db_manager = get_db_manager()
-    
-    # 2. Initialize wallet provider
-    from ..intelligence.agent_kit.wallet_provider import PrivyWalletProvider
-    wallet_provider = PrivyWalletProvider.get_instance(config)
-    
-    # 3. Initialize agent manager (without service dependency)
-    from ..intelligence.agent_kit.agent_manager import AgentManager
-    agent_manager = AgentManager.get_instance(config)
-    
-    # 4. Initialize agent kit service (with wallet_provider)
-    from ..intelligence.agent_kit.service import AgentKitService
-    agent_kit_service = AgentKitService.get_instance(config, wallet_provider=wallet_provider)
-    
-    # 5. Connect the components
-    agent_manager.set_service(agent_kit_service)
-    agent_kit_service.set_agent_manager(agent_manager)
-    
-    # 6. Get agent kit client
-    agent_kit_client = get_agent_kit_client()
-    
-    # 7. Get intelligence engine
-    intelligence_engine = get_intelligence_engine()
-    
-    # 8. Set dependencies after creation
-    agent_kit_client.set_intelligence_engine(intelligence_engine)
-    
-    # 9. Return all initialized services
-    return {
-        "agent_kit_service": agent_kit_service,
-        "agent_manager": agent_manager,
-        "agent_kit_client": agent_kit_client,
-        "intelligence_engine": intelligence_engine,
-        "wallet_provider": wallet_provider,
-        "allora_client": allora_client,
-        "market_analyzer": market_analyzer,
-        "market_data_service": market_data_service,
-        "db_manager": db_manager
-    }

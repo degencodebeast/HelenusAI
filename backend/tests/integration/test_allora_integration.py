@@ -1,12 +1,13 @@
 import pytest
 import asyncio
 from unittest.mock import MagicMock, patch
+import os
 
-from rebalancr.intelligence.allora.client import AlloraClient
-from rebalancr.intelligence.intelligence_engine import IntelligenceEngine
-from rebalancr.strategy.engine import StrategyEngine
-from rebalancr.execution.providers.portfolio.portfolio_action_provider import portfolio_action_provider
-from rebalancr.intelligence.reviewer import TradeReviewer
+from src.intelligence.allora.client import AlloraClient
+from src.intelligence.intelligence_engine import IntelligenceEngine
+from src.strategy.engine import StrategyEngine
+from src.execution.providers.portfolio.portfolio_action_provider import portfolio_action_provider
+from src.intelligence.reviewer import TradeReviewer
 
 # Sample test data
 SAMPLE_PORTFOLIO = {

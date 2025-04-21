@@ -11,14 +11,10 @@ from typing import Dict, Any, List, Optional, Tuple, Union
 from datetime import datetime, timedelta
 from enum import Enum
 
-logger = logging.getLogger(__name__)
+# Import moved enum
+from ..core.enums import MarketCondition
 
-class MarketCondition(str, Enum):
-    """Possible market conditions"""
-    NORMAL = "normal"
-    VOLATILE = "volatile"
-    BULL = "bull"
-    BEAR = "bear"
+logger = logging.getLogger(__name__)
 
 class MarketConditionClassifier:
     """
@@ -199,18 +195,14 @@ class MarketConditionClassifier:
         if len(historical_metrics) < 2:
             return None
             
-        # Get current condition
-        current_metrics = historical_metrics[-1]
+        # Get previous and current condition
+        old_sentiment = historical_sentiment[-2] if historical_sentiment and len(historical_sentiment) >= 2 else None
+        old_condition = self.classify(historical_metrics[-2], old_sentiment)
+        
         current_sentiment = historical_sentiment[-1] if historical_sentiment else None
-        current_condition = self.classify_for_asset(asset, current_metrics, current_sentiment)
+        current_condition = self.classify(historical_metrics[-1], current_sentiment)
         
-        # Get previous condition
-        prev_metrics = historical_metrics[-2]
-        prev_sentiment = historical_sentiment[-2] if historical_sentiment else None
-        prev_condition = self.classify_for_asset(asset, prev_metrics, prev_sentiment)
-        
-        # Check for transition
-        if current_condition != prev_condition:
-            return (prev_condition, current_condition)
+        if old_condition != current_condition:
+            return (old_condition, current_condition)
             
         return None 

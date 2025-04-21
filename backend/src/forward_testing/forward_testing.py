@@ -16,9 +16,9 @@ from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 
-from rebalancr.intelligence.intelligence_engine import IntelligenceEngine
-from rebalancr.strategy.engine import StrategyEngine
-from rebalancr.performance.analyzer import PerformanceAnalyzer
+from src.intelligence.intelligence_engine import IntelligenceEngine
+from src.strategy.engine import StrategyEngine
+from src.performance.analyzer import PerformanceAnalyzer
 
 logger = logging.getLogger(__name__)
 

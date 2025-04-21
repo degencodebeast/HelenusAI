@@ -1,9 +1,10 @@
+from pytest import fixture
 import asyncio
 import logging
 import pytest
-from ...src.intelligence.agent_kit.agent_manager import AgentManager
-from ...src.intelligence.agent_kit.service import AgentKitService
-from ...src.config import Settings
+from src.intelligence.agent_kit.agent_manager import AgentManager
+from src.intelligence.agent_kit.service import AgentKitService
+from src.config import Settings
 
 # Configure logging
 logging.basicConfig(

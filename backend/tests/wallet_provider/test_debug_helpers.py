@@ -4,8 +4,12 @@ import asyncio
 import aiohttp
 import logging
 import pytest
-from rebalancr.intelligence.agent_kit.wallet_provider import PrivyWalletProvider
-from rebalancr.config import Settings
+from unittest.mock import MagicMock
+
+# Fix import paths
+from src.intelligence.agent_kit.wallet_provider import PrivyWalletProvider
+from src.api.dependencies import create_application_services, initialize_services # Assuming these exist
+from src.config import Settings
 
 # Enhanced logging for debugging
 logging.basicConfig(

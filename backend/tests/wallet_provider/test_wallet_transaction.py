@@ -2,8 +2,11 @@ import asyncio
 from decimal import Decimal
 import logging
 import pytest
-from rebalancr.intelligence.agent_kit.wallet_provider import PrivyWalletProvider
-from rebalancr.config import Settings
+from web3 import Web3
+
+# Fix import path
+from src.intelligence.agent_kit.wallet_provider import PrivyWalletProvider
+from src.config import Settings
 
 # Configure logging
 logging.basicConfig(

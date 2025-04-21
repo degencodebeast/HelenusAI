@@ -11,6 +11,9 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 
+# Import interfaces
+from ..core.interfaces import IPerformanceAnalyzer, IDatabaseManager
+
 logger = logging.getLogger(__name__)
 
 class TradeLog(BaseModel):
@@ -34,7 +37,7 @@ class TradeLog(BaseModel):
     profit_loss: Optional[float] = None
     profit_loss_percent: Optional[float] = None
 
-class PerformanceAnalyzer:
+class PerformanceAnalyzer(IPerformanceAnalyzer):
     """
     Analyzes the performance of rebalancing strategies and AI signals.
     
@@ -46,8 +49,8 @@ class PerformanceAnalyzer:
     - Correlation between signals and outcomes
     """
     
-    def __init__(self, db_manager=None):
-        self.db_manager = db_manager
+    def __init__(self, db_manager: Optional[IDatabaseManager] = None):
+        self.db_manager: Optional[IDatabaseManager] = db_manager
         
     async def log_rebalance(self, rebalance_data: Dict[str, Any]) -> None:
         """Log a rebalancing action for future analysis"""
@@ -80,13 +83,20 @@ class PerformanceAnalyzer:
                     confidence=rebalance_signal.get("confidence", 0.5)
                 )
                 
-                await self._save_trade_log(log_entry)
+                if self.db_manager:
+                    await self._save_trade_log(log_entry)
+                else:
+                    logger.warning("Database manager not configured, skipping trade log saving.")
                 
         except Exception as e:
             logger.error(f"Error logging rebalance: {str(e)}")
     
     async def update_trade_outcome(self, log_id: int, exit_price: float) -> None:
         """Update a trade log with the outcome"""
+        if not self.db_manager:
+             logger.warning("Database manager not configured, cannot update trade outcome.")
+             return
+             
         try:
             # Get the log entry
             log_entry = await self._get_trade_log(log_id)
@@ -130,6 +140,10 @@ class PerformanceAnalyzer:
         Returns:
             Dictionary with performance metrics
         """
+        if not self.db_manager:
+             logger.warning("Database manager not configured, cannot analyze performance.")
+             return {"error": "Database manager not configured"}
+             
         try:
             # Get all trade logs for analysis
             logs = await self._get_trade_logs(portfolio_id)
@@ -386,7 +400,11 @@ class PerformanceAnalyzer:
         return "\n".join(lines)
     
     def _generate_recommendations(self, analysis: Dict[str, Any]) -> str:
-        """Generate recommendations based on performance analysis"""
+        """Generate actionable recommendations based on performance analysis"""
+        # Requires self.db_manager potentially for deeper analysis
+        # if not self.db_manager:
+        #     return "Recommendations require database access."
+        
         recommendations = []
         
         # Check signal accuracy
@@ -465,35 +483,39 @@ class PerformanceAnalyzer:
         return "\n".join(recommendations)
         
     async def _save_trade_log(self, log_entry: TradeLog) -> None:
-        """Save trade log to database"""
-        if self.db_manager:
-            await self.db_manager.save_trade_log(log_entry.dict())
-        else:
-            logger.warning("No DB manager for saving trade log")
+        """Save trade log to database (Placeholder - needs DB schema)"""
+        if not self.db_manager:
+            return # Already logged warning in caller
+        # Replace with actual DB interaction
+        logger.debug(f"Saving trade log (placeholder): {log_entry.dict()}")
+        # Example: await self.db_manager.insert_trade_log(log_entry.dict())
+        pass
     
     async def _update_trade_log(self, log_entry: TradeLog) -> None:
-        """Update trade log in database"""
-        if self.db_manager:
-            await self.db_manager.update_trade_log(log_entry.dict())
-        else:
-            logger.warning("No DB manager for updating trade log")
+        """Update trade log in database (Placeholder)"""
+        if not self.db_manager:
+            return
+        # Replace with actual DB interaction
+        logger.debug(f"Updating trade log (placeholder): {log_entry.dict()}")
+        # Example: await self.db_manager.update_trade_log(log_entry.dict())
+        pass
     
     async def _get_trade_log(self, log_id: int) -> Optional[TradeLog]:
-        """Get trade log from database"""
-        if self.db_manager:
-            log_data = await self.db_manager.get_trade_log(log_id)
-            if log_data:
-                return TradeLog(**log_data)
-        else:
-            logger.warning("No DB manager for getting trade log")
+        """Get specific trade log from database (Placeholder)"""
+        if not self.db_manager:
+            return None
+        # Replace with actual DB interaction
+        logger.debug(f"Getting trade log {log_id} (placeholder)")
+        # Example: data = await self.db_manager.get_trade_log_by_id(log_id)
+        # return TradeLog(**data) if data else None
         return None
     
     async def _get_trade_logs(self, portfolio_id: Optional[int] = None) -> List[TradeLog]:
-        """Get trade logs from database"""
-        if self.db_manager:
-            filters = {"portfolio_id": portfolio_id} if portfolio_id else {}
-            logs_data = await self.db_manager.get_trade_logs(filters)
-            return [TradeLog(**log) for log in logs_data]
-        else:
-            logger.warning("No DB manager for getting trade logs")
-            return [] 
+        """Get trade logs from database (Placeholder)"""
+        if not self.db_manager:
+            return []
+        # Replace with actual DB interaction
+        logger.debug(f"Getting trade logs for portfolio {portfolio_id} (placeholder)")
+        # Example: data_list = await self.db_manager.get_trade_logs(portfolio_id=portfolio_id)
+        # return [TradeLog(**data) for data in data_list]
+        return [] 
